@@ -3,6 +3,6 @@
   "attempts": {},
   "done": [],
   "alerted": [],
-  "last_run": "2026-10-27T13:56:53.642304+00:00",
+  "last_run": "2026-10-27T20:06:45.488236+00:00",
   "last_error": "AuthError: ناقص سر من: YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN"
 }
