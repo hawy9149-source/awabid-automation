@@ -1,0 +1,85 @@
+name: awabid
+
+on:
+  schedule:
+    - cron: "10 1,7,13,19 * * *"   # محاولات النشر: 4 مرات باليوم (كل مرة تعبي موعد فاضي)
+    - cron: "40 4 * * *"            # فحص صحي يومي (يبقي التوكن شغال ويكشف أي خلل)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "health = فحص | publish = إنتاج ونشر"
+        type: choice
+        options: [health, publish]
+        default: health
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: awabid
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide mode
+        id: mode
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            if [ "${{ github.event.schedule }}" = "40 4 * * *" ]; then MODE=health; else MODE=publish; fi
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: System deps (ffmpeg + Arabic fonts)
+        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg fonts-noto-core
+
+      - name: Python libs (always the latest, edge-tts breaks when Microsoft changes things)
+        run: pip install -U pip && pip install -U numpy scipy requests edge-tts google-api-python-client google-auth
+
+      - name: Node libs
+        if: steps.mode.outputs.mode == 'publish'
+        run: cd video && npm install --no-audit --no-fund
+
+      - name: Run
+        run: python main.py ${{ steps.mode.outputs.mode }}
+
+      - name: Save state (also keeps the schedule alive after 60 idle days)
+        if: always() && steps.mode.outputs.mode == 'publish'
+        run: |
+          git config user.name "awabid-bot"
+          git config user.email "awabid-bot@users.noreply.github.com"
+          git add state.json || true
+          git commit -m "state $(date -u +'%F %H:%M')" || true
+          git pull --rebase || true
+          git push || true
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          N=$(gh issue list --state open --search "تنبيه أوابد in:title" --json number -q '.[0].number' || true)
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --body "فشل مرة ثانية ($URL). افتح الملخص Summary تلقى السبب." || true
+          else
+            gh issue create --title "تنبيه أوابد: فشل التشغيل" --body "$URL - افتح الملخص Summary تلقى السبب بالضبط." || true
+          fi
