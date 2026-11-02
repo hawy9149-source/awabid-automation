@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 340
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # اختياري: احتياطي لو Gemini فشل
       YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
       YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
       YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
@@ -48,8 +49,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: System deps (ffmpeg + Arabic fonts)
-        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg fonts-noto-core
+      - name: System deps (ffmpeg + Arabic and emoji fonts)
+        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-color-emoji
 
       - name: Python libs (always the latest, edge-tts breaks when Microsoft changes things)
         run: pip install -U pip && pip install -U numpy scipy requests edge-tts google-api-python-client google-auth
